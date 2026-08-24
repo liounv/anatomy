@@ -2,75 +2,82 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Anatomy 3D MindMap V2</title>
+<title>Anatomy 3D MindMap V3</title>
 <style>
-html,body{margin:0;height:100%;overflow:hidden;background:#000;color:#fff;font-family:"Microsoft YaHei"}
-#panel{position:fixed;right:30px;top:30px;width:330px;padding:20px;background:rgba(5,15,35,.85);border:1px solid #4cc9ff;border-radius:18px;display:none;z-index:10;backdrop-filter:blur(15px)}
-canvas{display:block}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;font-family:"Microsoft YaHei"}
+#tip{position:fixed;top:20px;left:20px;color:#8bdcff;z-index:5}
+#panel{position:fixed;right:25px;top:25px;width:300px;padding:18px;color:white;background:rgba(0,20,40,.85);border:1px solid #29aaff;border-radius:15px;display:none;z-index:5}
 </style>
 </head>
 <body>
+<div id="tip">ANATOMY 3D · 双击直接运行版</div>
 <div id="panel"></div>
-<script type="module">
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js";
-import {OrbitControls} from "https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/controls/OrbitControls.js";
 
-const CONFIG={radius:320,nodeSize:110};
+<script src="https://cdn.jsdelivr.net/npm/three@0.160/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160/examples/js/controls/OrbitControls.js"></script>
 
+<script>
+/*
+================================
+球体参数
+================================
+*/
+const CONFIG={
+ radius:320,
+ nodeSize:120
+};
+
+/*
+================================
+解剖学JSON
+后续直接替换这里
+================================
+*/
 const anatomyData={
 name:"人体解剖学",
-detail:"人体结构与功能知识总览",
+detail:"人体结构与功能总览",
 children:[
-{name:"神经系统",detail:"控制感觉、运动及高级脑功能",children:[
-{name:"脑",detail:"中枢神经系统最高级部分"},
-{name:"脊髓",detail:"连接脑与身体神经"}]},
-{name:"循环系统",detail:"运输氧气和营养物质",children:[
-{name:"心脏",detail:"血液循环动力器官"},
-{name:"血管",detail:"运输血液网络"}]},
+{name:"神经系统",detail:"负责信息传递和调节",children:[
+{name:"脑",detail:"中枢神经系统高级部分"},
+{name:"脊髓",detail:"连接脑与周围神经"}]},
 {name:"运动系统",detail:"骨骼肌肉关节组成",children:[
-{name:"骨骼",detail:"支撑人体结构"},
-{name:"肌肉",detail:"产生运动力量"}]}
+{name:"骨骼",detail:"支撑身体结构"},
+{name:"肌肉",detail:"产生运动力量"}]},
+{name:"循环系统",detail:"运输氧气和营养",children:[
+{name:"心脏",detail:"血液循环动力器官"},
+{name:"血管",detail:"血液运输通道"}]}
 ]};
 
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x000000);
 
-const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,1,2000);
-camera.position.z=900;
+const camera=new THREE.PerspectiveCamera(
+45,innerWidth/innerHeight,1,3000
+);
+camera.position.set(0,0,900);
 
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(devicePixelRatio);
 document.body.appendChild(renderer.domElement);
+
+const light=new THREE.PointLight(0x66ccff,2,1500);
+light.position.set(300,300,500);
+scene.add(light);
+scene.add(new THREE.AmbientLight(0x446688));
 
 const group=new THREE.Group();
 scene.add(group);
 
-function makeLabel(text){
-const c=document.createElement("canvas");
-c.width=512;c.height=160;
-const x=c.getContext("2d");
-x.fillStyle="rgba(5,25,45,.85)";
-x.roundRect(10,10,492,140,35);x.fill();
-x.strokeStyle="#55cfff";x.stroke();
-x.fillStyle="white";x.font="42px Microsoft YaHei";
-x.fillText(text,45,95);
-const t=new THREE.CanvasTexture(c);
-const m=new THREE.SpriteMaterial({map:t,transparent:true});
-const s=new THREE.Sprite(m);
-s.scale.set(CONFIG.nodeSize*3,CONFIG.nodeSize,.1);
-return s;
-}
-
 function flatten(n,p=null,a=[]){
 a.push({node:n,parent:p});
-(n.children||[]).forEach(c=>flatten(c,n,a));
+(n.children||[]).forEach(x=>flatten(x,n,a));
 return a;
 }
 
-function pos(i,n){
-const phi=Math.acos(-1+(2*i+1)/n);
-const theta=Math.sqrt(n*Math.PI)*phi;
+function spherePoint(i,total){
+let phi=Math.acos(-1+(2*i+1)/total);
+let theta=Math.sqrt(total*Math.PI)*phi;
 return new THREE.Vector3(
 Math.cos(theta)*Math.sin(phi),
 Math.sin(theta)*Math.sin(phi),
@@ -78,51 +85,76 @@ Math.cos(phi)
 ).multiplyScalar(CONFIG.radius);
 }
 
-const items=flatten(anatomyData);
-const sprites=[];
+function makeNode(text){
+let c=document.createElement("canvas");
+c.width=512;c.height=160;
+let x=c.getContext("2d");
+x.fillStyle="rgba(10,35,60,.9)";
+x.beginPath();
+x.roundRect(15,15,482,130,30);
+x.fill();
+x.strokeStyle="#38bfff";
+x.lineWidth=4;
+x.stroke();
+x.fillStyle="#fff";
+x.font="42px Microsoft YaHei";
+x.fillText(text,45,95);
 
-items.forEach((d,i)=>{
-const s=makeLabel(d.node.name);
-s.position.copy(pos(i,items.length));
+let tex=new THREE.CanvasTexture(c);
+let mat=new THREE.SpriteMaterial({
+map:tex,
+transparent:true
+});
+let s=new THREE.Sprite(mat);
+s.scale.set(220,70,1);
+return s;
+}
+
+const data=flatten(anatomyData);
+const nodes=[];
+
+data.forEach((d,i)=>{
+let s=makeNode(d.node.name);
+s.position.copy(spherePoint(i,data.length));
 s.userData=d;
 group.add(s);
-sprites.push(s);
+nodes.push(s);
 });
 
-const controls=new OrbitControls(camera,renderer.domElement);
+const controls=new THREE.OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;
 controls.autoRotate=true;
-controls.autoRotateSpeed=.6;
+controls.autoRotateSpeed=.5;
 
 const ray=new THREE.Raycaster();
 const mouse=new THREE.Vector2();
 
-renderer.domElement.onclick=e=>{
+renderer.domElement.addEventListener("click",e=>{
 mouse.x=e.clientX/innerWidth*2-1;
 mouse.y=-(e.clientY/innerHeight)*2+1;
 ray.setFromCamera(mouse,camera);
-const hit=ray.intersectObjects(sprites)[0];
+let hit=ray.intersectObjects(nodes)[0];
 if(hit){
 let d=hit.object.userData.node;
 let p=document.getElementById("panel");
 p.style.display="block";
 p.innerHTML="<h2>"+d.name+"</h2><p>"+d.detail+"</p>";
 }
-};
+});
 
 function animate(){
 requestAnimationFrame(animate);
-controls.update();
 group.rotation.y+=0.001;
+controls.update();
 renderer.render(scene,camera);
 }
 animate();
 
-addEventListener("resize",()=>{
+window.onresize=()=>{
 camera.aspect=innerWidth/innerHeight;
 camera.updateProjectionMatrix();
 renderer.setSize(innerWidth,innerHeight);
-});
+};
 </script>
 </body>
 </html>
