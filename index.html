@@ -1,160 +1,834 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<title>Anatomy 3D MindMap V3</title>
-<style>
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;font-family:"Microsoft YaHei"}
-#tip{position:fixed;top:20px;left:20px;color:#8bdcff;z-index:5}
-#panel{position:fixed;right:25px;top:25px;width:300px;padding:18px;color:white;background:rgba(0,20,40,.85);border:1px solid #29aaff;border-radius:15px;display:none;z-index:5}
-</style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>3D解剖学 · 层级展开</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            font-family: "Microsoft YaHei", "Noto Sans SC", sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #modal {
+            position: fixed;
+            right: 32px;
+            top: 32px;
+            width: 340px;
+            padding: 24px;
+            color: #eaf8ff;
+            background: rgba(8, 18, 35, .78);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(100, 220, 255, .45);
+            border-radius: 22px;
+            box-shadow: 0 0 40px rgba(0, 150, 255, .25), inset 0 0 25px rgba(255, 255, 255, .05);
+            display: none;
+            z-index: 5;
+            letter-spacing: 1px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        #modal h2 {
+            margin-top: 0;
+            color: #7edcff;
+        }
+        #modal p {
+            margin: 6px 0;
+            line-height: 1.6;
+        }
+        #modal .tag {
+            display: inline-block;
+            background: rgba(100, 220, 255, .15);
+            border-radius: 12px;
+            padding: 2px 12px;
+            font-size: 12px;
+            color: #7edcff;
+            margin-top: 8px;
+        }
+        #modal .hint {
+            color: #88ccff;
+            font-size: 13px;
+            margin-top: 10px;
+            border-top: 1px solid rgba(255,255,255,.1);
+            padding-top: 10px;
+        }
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #7edcff;
+            font-size: 18px;
+            z-index: 10;
+            letter-spacing: 2px;
+            text-shadow: 0 0 20px rgba(0, 150, 255, .8);
+        }
+        @media (max-width: 640px) {
+            #modal {
+                right: 12px;
+                top: 12px;
+                width: 260px;
+                padding: 16px;
+            }
+        }
+    </style>
 </head>
 <body>
-<div id="tip">ANATOMY 3D · 双击直接运行版</div>
-<div id="panel"></div>
+    <div id="modal"></div>
+    <div id="loading">加载中...</div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.160/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.160/examples/js/controls/OrbitControls.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
 
-<script>
-/*
-================================
-球体参数
-================================
-*/
-const CONFIG={
- radius:320,
- nodeSize:120
-};
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-/*
-================================
-解剖学JSON
-后续直接替换这里
-================================
-*/
-const anatomyData={
-name:"人体解剖学",
-detail:"人体结构与功能总览",
-children:[
-{name:"神经系统",detail:"负责信息传递和调节",children:[
-{name:"脑",detail:"中枢神经系统高级部分"},
-{name:"脊髓",detail:"连接脑与周围神经"}]},
-{name:"运动系统",detail:"骨骼肌肉关节组成",children:[
-{name:"骨骼",detail:"支撑身体结构"},
-{name:"肌肉",detail:"产生运动力量"}]},
-{name:"循环系统",detail:"运输氧气和营养",children:[
-{name:"心脏",detail:"血液循环动力器官"},
-{name:"血管",detail:"血液运输通道"}]}
-]};
+        document.getElementById('loading').style.display = 'none';
 
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x000000);
+        // ============================================================
+        //  解剖学数据（完整树结构）
+        // ============================================================
+        const anatomyData = {
+            name: "人体解剖学",
+            detail: "研究人体形态结构、位置关系及功能联系，是医学与生物学的重要基础学科。",
+            children: [{
+                name: "基础概念",
+                detail: "解剖学的基本定义、研究对象、研究方法及学科框架。",
+                children: [{
+                    name: "解剖学定义",
+                    detail: "解剖学是研究人体形态结构、位置关系及功能联系的学科，是医学的基础。"
+                }, {
+                    name: "研究对象",
+                    detail: "人体解剖学的研究对象是人体各部分的形态、结构、位置和相互关系。"
+                }, {
+                    name: "研究方法",
+                    detail: "包括系统解剖学、局部解剖学、断层解剖学、比较解剖学等。",
+                    children: [{
+                        name: "系统解剖学",
+                        detail: "按功能系统（运动、消化、呼吸等）研究人体器官的形态结构。"
+                    }, {
+                        name: "断层解剖学",
+                        detail: "通过断层切面研究人体内部结构的形态和位置关系。"
+                    }, {
+                        name: "比较解剖学",
+                        detail: "通过比较不同物种的解剖结构，研究生物进化与功能适应。"
+                    }]
+                }, {
+                    name: "解剖学构架",
+                    detail: "人体解剖学的基本框架，包括方位术语、体表标志、区域划分及结构层次。"
+                }, {
+                    name: "系统",
+                    detail: "人体由运动、消化、呼吸、泌尿、生殖、循环、淋巴、内分泌、神经等系统组成。位于胸腹盆腔内的器官统称为内脏系统。"
+                }]
+            }, {
+                name: "人体组成",
+                detail: "人体由细胞、组织、器官和系统四个层次构成。",
+                children: [{
+                    name: "细胞",
+                    detail: "人体结构和功能的基本单位，具有新陈代谢、生长、分化等能力。"
+                }, {
+                    name: "组织",
+                    detail: "由形态相似、功能相关的细胞和细胞间质构成，分为四大类。",
+                    children: [{
+                        name: "上皮组织",
+                        detail: "覆盖体表、体腔及器官表面，具有保护、分泌、吸收等功能。"
+                    }, {
+                        name: "结缔组织",
+                        detail: "连接、支持、营养和保护各器官，包括骨、软骨、脂肪、血液等。"
+                    }, {
+                        name: "肌组织",
+                        detail: "由肌细胞组成，具有收缩功能，分为骨骼肌、平滑肌和心肌。"
+                    }, {
+                        name: "神经组织",
+                        detail: "由神经元和神经胶质细胞组成，负责信息传导和处理。"
+                    }]
+                }, {
+                    name: "器官",
+                    detail: "由不同组织按一定方式组合而成，具有特定的形态和功能。"
+                }]
+            }, {
+                name: "解剖学方位",
+                detail: "描述人体结构位置关系的标准术语体系。",
+                children: [{
+                    name: "上与下",
+                    detail: "靠近头部为上，靠近足部为下。"
+                }, {
+                    name: "前与后",
+                    detail: "靠近腹侧为前，靠近背侧为后。"
+                }, {
+                    name: "内侧与外侧",
+                    detail: "靠近身体正中面为内侧，远离正中面为外侧。"
+                }, {
+                    name: "近端与远端",
+                    detail: "靠近躯干或起点为近端，远离躯干或起点为远端。"
+                }, {
+                    name: "浅与深",
+                    detail: "靠近体表为浅，远离体表为深。"
+                }]
+            }, {
+                name: "局部解剖学",
+                detail: "按人体局部区域研究各结构的形态、位置和毗邻关系。",
+                children: [{
+                    name: "头颈部",
+                    detail: "包括颅、面、颈等区域，含脑、感觉器官、呼吸道起始部等。"
+                }, {
+                    name: "胸部",
+                    detail: "由胸壁和胸腔组成，内含心、肺、大血管、食管等器官。"
+                }, {
+                    name: "腹部",
+                    detail: "由腹壁和腹腔组成，内含消化、泌尿、内分泌等器官。"
+                }, {
+                    name: "盆部",
+                    detail: "由骨盆和盆腔组成，内含泌尿、生殖及消化系统末端器官。"
+                }, {
+                    name: "上肢",
+                    detail: "包括肩、臂、前臂和手，由骨、关节、肌肉和神经血管组成。"
+                }, {
+                    name: "下肢",
+                    detail: "包括髋、大腿、小腿和足，支撑体重并实现行走运动。"
+                }, {
+                    name: "体表与区域",
+                    detail: "人体表面的分区与标志，用于定位深层结构和临床检查。"
+                }]
+            }, {
+                name: "运动系统",
+                detail: "由骨骼、关节和肌肉组成，实现人体的运动、支撑和保护功能。",
+                children: [{
+                    name: "骨骼",
+                    detail: "由骨和软骨构成，是人体支架，具有支撑、保护和造血功能。",
+                    children: [{
+                        name: "颅骨",
+                        detail: "由22块骨组成，保护脑和感觉器官，形成面部轮廓。"
+                    }, {
+                        name: "躯干骨",
+                        detail: "包括脊柱、胸骨和肋骨，构成躯干支架，保护内脏。"
+                    }, {
+                        name: "四肢骨",
+                        detail: "包括上肢骨和下肢骨，构成肢体支架，参与运动。"
+                    }]
+                }, {
+                    name: "关节",
+                    detail: "骨与骨之间的连接装置，根据活动度分为三类。",
+                    children: [{
+                        name: "不动关节",
+                        detail: "骨与骨之间借纤维或软骨牢固连接，无活动性。"
+                    }, {
+                        name: "半活动关节",
+                        detail: "骨与骨之间借软骨连接，允许轻微活动。"
+                    }, {
+                        name: "活动关节",
+                        detail: "骨与骨之间借关节囊连接，具有较大活动范围。"
+                    }]
+                }, {
+                    name: "肌肉",
+                    detail: "由肌组织构成，通过收缩产生运动，分为三类。",
+                    children: [{
+                        name: "骨骼肌",
+                        detail: "附着于骨骼，受躯体神经支配，产生随意运动。"
+                    }, {
+                        name: "平滑肌",
+                        detail: "分布于内脏器官和血管壁，受自主神经支配，不随意运动。"
+                    }, {
+                        name: "心肌",
+                        detail: "构成心脏壁，具有自动节律性，受自主神经调节。"
+                    }]
+                }]
+            }, {
+                name: "消化系统",
+                detail: "负责食物的消化、吸收和排泄，由消化管和消化腺组成。",
+                children: [{
+                    name: "消化管",
+                    detail: "从口腔到肛门的管道，包括咽、食管、胃、小肠和大肠等。"
+                }, {
+                    name: "消化腺",
+                    detail: "分泌消化液的腺体，包括唾液腺、肝、胰及消化道壁内腺体。"
+                }]
+            }, {
+                name: "呼吸系统",
+                detail: "负责气体交换，维持生命活动的氧气供给和二氧化碳排出。",
+                children: [{
+                    name: "呼吸道",
+                    detail: "气体进出肺的通道，包括鼻、咽、喉、气管和支气管。"
+                }, {
+                    name: "肺",
+                    detail: "气体交换的主要器官，由肺泡和肺间质组成。"
+                }]
+            }, {
+                name: "泌尿系统",
+                detail: "排出代谢废物，调节水盐平衡和酸碱平衡，维持内环境稳定。",
+                children: [{
+                    name: "肾",
+                    detail: "过滤血液，生成尿液，调节水电解质平衡和血压。"
+                }, {
+                    name: "输尿管",
+                    detail: "将尿液从肾盂输送到膀胱的细长管道。"
+                }, {
+                    name: "膀胱",
+                    detail: "储存尿液的肌性囊状器官，位于盆腔内。"
+                }, {
+                    name: "尿道",
+                    detail: "将尿液从膀胱排出体外的管道。"
+                }]
+            }, {
+                name: "生殖系统",
+                detail: "负责繁殖后代和分泌性激素，维持第二性征。",
+                children: [{
+                    name: "男性生殖系统",
+                    detail: "包括睾丸、附睾、输精管、前列腺、阴茎等，产生精子和分泌雄激素。"
+                }, {
+                    name: "女性生殖系统",
+                    detail: "包括卵巢、输卵管、子宫、阴道等，产生卵子和分泌雌激素。"
+                }, {
+                    name: "性腺",
+                    detail: "产生生殖细胞和分泌性激素的器官，男性为睾丸，女性为卵巢。"
+                }]
+            }, {
+                name: "循环系统",
+                detail: "负责血液在全身的循环流动，运输物质和维持内环境稳态。",
+                children: [{
+                    name: "心血管系统",
+                    detail: "由心脏、动脉、毛细血管和静脉组成，实现血液循环。"
+                }, {
+                    name: "心脏",
+                    detail: "推动血液循环的动力器官，由心肌构成，具有自动节律性。"
+                }, {
+                    name: "动脉",
+                    detail: "将血液从心脏输送到全身各器官的血管。"
+                }, {
+                    name: "静脉",
+                    detail: "将血液从全身各器官回流至心脏的血管。"
+                }, {
+                    name: "毛细血管",
+                    detail: "连接动脉和静脉的微小血管，是物质交换的场所。"
+                }]
+            }, {
+                name: "淋巴系统",
+                detail: "负责淋巴液回流和免疫防御，是循环系统的辅助部分。",
+                children: [{
+                    name: "淋巴管",
+                    detail: "输送淋巴液的管道网络，回收组织液和免疫细胞。"
+                }, {
+                    name: "淋巴结",
+                    detail: "过滤淋巴液，捕获病原体和异物，是免疫应答的重要场所。"
+                }, {
+                    name: "脾",
+                    detail: "最大的淋巴器官，过滤血液，参与免疫反应和造血调节。"
+                }, {
+                    name: "胸腺",
+                    detail: "T淋巴细胞成熟和分化的场所，参与免疫系统发育。"
+                }]
+            }, {
+                name: "内分泌系统",
+                detail: "通过分泌激素调节机体代谢、生长发育和生殖等生理功能。",
+                children: [{
+                    name: "甲状腺",
+                    detail: "分泌甲状腺激素，调节新陈代谢和生长发育。"
+                }, {
+                    name: "甲状旁腺",
+                    detail: "分泌甲状旁腺激素，调节钙磷代谢和骨转换。"
+                }, {
+                    name: "肾上腺",
+                    detail: "分泌肾上腺素、皮质醇等激素，参与应激反应和代谢调节。"
+                }, {
+                    name: "垂体",
+                    detail: "内分泌系统的中枢，分泌多种激素，调控其他内分泌腺。"
+                }, {
+                    name: "胰岛",
+                    detail: "胰腺内分泌部，分泌胰岛素和胰高血糖素，调节血糖。"
+                }]
+            }, {
+                name: "神经系统",
+                detail: "负责信息传递、感觉分析和运动控制，是人体最复杂的调节系统。",
+                children: [{
+                    name: "中枢神经系统",
+                    detail: "由脑和脊髓组成，是信息整合和决策的中心。",
+                    children: [{
+                        name: "脑",
+                        detail: "中枢神经系统最高级结构，负责意识、思维、记忆和运动控制。"
+                    }, {
+                        name: "脊髓",
+                        detail: "连接脑与周围神经，传导神经信号，参与反射活动。"
+                    }]
+                }, {
+                    name: "周围神经系统",
+                    detail: "由脑神经和脊神经组成，连接中枢与全身各器官。",
+                    children: [{
+                        name: "脑神经",
+                        detail: "从脑发出的12对神经，支配头面部和部分内脏器官。"
+                    }, {
+                        name: "脊神经",
+                        detail: "从脊髓发出的31对神经，支配躯干和四肢的感觉与运动。"
+                    }]
+                }, {
+                    name: "自主神经系统",
+                    detail: "调节内脏活动、血管舒缩和腺体分泌，不受意识控制。",
+                    children: [{
+                        name: "交感神经",
+                        detail: "在应激状态下激活，使机体处于兴奋和准备战斗状态。"
+                    }, {
+                        name: "副交感神经",
+                        detail: "在静息状态下主导，促进机体恢复和能量储存。"
+                    }]
+                }]
+            }, {
+                name: "感觉器官",
+                detail: "接收外界和体内刺激，产生视觉、听觉、平衡、味觉和嗅觉等感觉。",
+                children: [{
+                    name: "视觉器官",
+                    detail: "眼及附属结构，感知光线并将其转化为神经信号。"
+                }, {
+                    name: "听觉器官",
+                    detail: "耳及听觉传导通路，感知声音和维持听觉功能。"
+                }, {
+                    name: "平衡器官",
+                    detail: "内耳的前庭和半规管，感知头部位置和运动，维持身体平衡。"
+                }, {
+                    name: "味觉器官",
+                    detail: "舌上的味蕾，感知酸、甜、苦、咸、鲜等基本味觉。"
+                }, {
+                    name: "嗅觉器官",
+                    detail: "鼻腔内的嗅黏膜，感知气味分子，产生嗅觉。"
+                }]
+            }]
+        };
 
-const camera=new THREE.PerspectiveCamera(
-45,innerWidth/innerHeight,1,3000
-);
-camera.position.set(0,0,900);
+        // ============ 场景初始化 ============
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050508);
 
-const renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(innerWidth,innerHeight);
-renderer.setPixelRatio(devicePixelRatio);
-document.body.appendChild(renderer.domElement);
+        const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 1, 3000);
+        camera.position.set(0, 0, 920);
 
-const light=new THREE.PointLight(0x66ccff,2,1500);
-light.position.set(300,300,500);
-scene.add(light);
-scene.add(new THREE.AmbientLight(0x446688));
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.setSize(innerWidth, innerHeight);
+        document.body.appendChild(renderer.domElement);
 
-const group=new THREE.Group();
-scene.add(group);
+        scene.add(new THREE.AmbientLight(0xffffff, 1.5));
 
-function flatten(n,p=null,a=[]){
-a.push({node:n,parent:p});
-(n.children||[]).forEach(x=>flatten(x,n,a));
-return a;
-}
+        const light1 = new THREE.PointLight(0x4488ff, 2, 1500);
+        light1.position.set(400, 300, 500);
+        scene.add(light1);
 
-function spherePoint(i,total){
-let phi=Math.acos(-1+(2*i+1)/total);
-let theta=Math.sqrt(total*Math.PI)*phi;
-return new THREE.Vector3(
-Math.cos(theta)*Math.sin(phi),
-Math.sin(theta)*Math.sin(phi),
-Math.cos(phi)
-).multiplyScalar(CONFIG.radius);
-}
+        const light2 = new THREE.PointLight(0xff4488, 1.5, 1500);
+        light2.position.set(-400, -200, 400);
+        scene.add(light2);
 
-function makeNode(text){
-let c=document.createElement("canvas");
-c.width=512;c.height=160;
-let x=c.getContext("2d");
-x.fillStyle="rgba(10,35,60,.9)";
-x.beginPath();
-x.roundRect(15,15,482,130,30);
-x.fill();
-x.strokeStyle="#38bfff";
-x.lineWidth=4;
-x.stroke();
-x.fillStyle="#fff";
-x.font="42px Microsoft YaHei";
-x.fillText(text,45,95);
+        // ============ 工具函数 ============
+        function drawRoundRect(ctx, x, y, w, h, r) {
+            if (typeof ctx.roundRect === 'function') {
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, r);
+            } else {
+                ctx.beginPath();
+                ctx.moveTo(x + r, y);
+                ctx.lineTo(x + w - r, y);
+                ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+                ctx.lineTo(x + w, y + h - r);
+                ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+                ctx.lineTo(x + r, y + h);
+                ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+                ctx.lineTo(x, y + r);
+                ctx.quadraticCurveTo(x, y, x + r, y);
+                ctx.closePath();
+            }
+        }
 
-let tex=new THREE.CanvasTexture(c);
-let mat=new THREE.SpriteMaterial({
-map:tex,
-transparent:true
-});
-let s=new THREE.Sprite(mat);
-s.scale.set(220,70,1);
-return s;
-}
+        // 颜色映射：根->蓝，一级->黄，二级->绿，三级->青，四级->紫
+        function getBorderColor(depth, isRoot) {
+            if (isRoot) return '#4a9eff'; // 蓝色
+            switch (depth) {
+                case 1: return '#ffd93d'; // 黄色
+                case 2: return '#6bcb77'; // 绿色
+                case 3: return '#4fc3f7'; // 青色
+                default: return '#ce93d8'; // 紫色
+            }
+        }
 
-const data=flatten(anatomyData);
-const nodes=[];
+        function getBackgroundColor(depth, isRoot) {
+            if (isRoot) return 'rgba(20,60,120,.96)';
+            switch (depth) {
+                case 1: return 'rgba(80,70,30,.93)';
+                case 2: return 'rgba(30,70,40,.90)';
+                case 3: return 'rgba(20,60,80,.90)';
+                default: return 'rgba(50,30,70,.90)';
+            }
+        }
 
-data.forEach((d,i)=>{
-let s=makeNode(d.node.name);
-s.position.copy(spherePoint(i,data.length));
-s.userData=d;
-group.add(s);
-nodes.push(s);
-});
+        function getTextColor(depth, isRoot) {
+            if (isRoot) return '#ffffff';
+            switch (depth) {
+                case 1: return '#fff8e0';
+                case 2: return '#e0ffe0';
+                case 3: return '#e0f8ff';
+                default: return '#f0e0ff';
+            }
+        }
 
-const controls=new THREE.OrbitControls(camera,renderer.domElement);
-controls.enableDamping=true;
-controls.autoRotate=true;
-controls.autoRotateSpeed=.5;
+        function createCard(text, isRoot = false, depth = 1) {
+            const c = document.createElement("canvas");
+            c.width = 800;
+            c.height = 240;
+            const ctx = c.getContext("2d");
+            ctx.clearRect(0, 0, 800, 240);
 
-const ray=new THREE.Raycaster();
-const mouse=new THREE.Vector2();
+            const bgColor = getBackgroundColor(depth, isRoot);
+            const borderColor = getBorderColor(depth, isRoot);
+            const textColor = getTextColor(depth, isRoot);
+            let fontSize = isRoot ? 52 : (depth === 1 ? 44 : 38);
+            const borderWidth = isRoot ? 4 : (depth === 1 ? 3 : 2);
 
-renderer.domElement.addEventListener("click",e=>{
-mouse.x=e.clientX/innerWidth*2-1;
-mouse.y=-(e.clientY/innerHeight)*2+1;
-ray.setFromCamera(mouse,camera);
-let hit=ray.intersectObjects(nodes)[0];
-if(hit){
-let d=hit.object.userData.node;
-let p=document.getElementById("panel");
-p.style.display="block";
-p.innerHTML="<h2>"+d.name+"</h2><p>"+d.detail+"</p>";
-}
-});
+            ctx.fillStyle = bgColor;
+            drawRoundRect(ctx, 15, 15, 770, 210, 35);
+            ctx.fill();
 
-function animate(){
-requestAnimationFrame(animate);
-group.rotation.y+=0.001;
-controls.update();
-renderer.render(scene,camera);
-}
-animate();
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = borderWidth;
+            ctx.shadowColor = isRoot ? 'rgba(74,158,255,.7)' : 'rgba(255,200,50,.5)';
+            ctx.shadowBlur = 12;
+            drawRoundRect(ctx, 15, 15, 770, 210, 35);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
 
-window.onresize=()=>{
-camera.aspect=innerWidth/innerHeight;
-camera.updateProjectionMatrix();
-renderer.setSize(innerWidth,innerHeight);
-};
-</script>
+            ctx.fillStyle = textColor;
+            let displayText = text;
+            if (text.length > 8) fontSize -= 6;
+            if (text.length > 12) fontSize -= 12;
+            ctx.font = `bold ${fontSize}px "Microsoft YaHei","Noto Sans SC",sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(displayText, 400, 135);
+
+            const tex = new THREE.CanvasTexture(c);
+            tex.minFilter = THREE.LinearFilter;
+            tex.generateMipmaps = false;
+
+            const scaleX = isRoot ? 210 : (depth === 1 ? 190 : 170);
+            const scaleY = isRoot ? 68 : (depth === 1 ? 62 : 56);
+            const sprite = new THREE.Sprite(
+                new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })
+            );
+            sprite.scale.set(scaleX, scaleY, 1);
+            return sprite;
+        }
+
+        // ============ 构建层级树 ============
+        function buildTree(node, parent = null, level = 0) {
+            node.parent = parent;
+            node.level = level;
+            node.expanded = false;
+            node.children = node.children || [];
+            node.children.forEach(child => buildTree(child, node, level + 1));
+            return node;
+        }
+        buildTree(anatomyData);
+
+        // ============ 分配位置 ============
+        const levelRadius = [0, 280, 120, 60, 30];
+
+        function assignPositions(node, parentPos, childIndex, totalChildren) {
+            let pos;
+            if (node.level === 0) {
+                pos = new THREE.Vector3(0, 0, 0);
+            } else {
+                const phi = Math.acos(-1 + (2 * childIndex + 1) / totalChildren);
+                const theta = Math.sqrt(totalChildren * Math.PI) * phi;
+                const dir = new THREE.Vector3(
+                    Math.sin(phi) * Math.cos(theta),
+                    Math.sin(phi) * Math.sin(theta),
+                    Math.cos(phi)
+                );
+                const radius = levelRadius[node.level] || 20;
+                pos = parentPos.clone().add(dir.multiplyScalar(radius));
+            }
+            node.position = pos;
+            const children = node.children || [];
+            children.forEach((child, idx) => {
+                assignPositions(child, pos, idx, children.length);
+            });
+        }
+        assignPositions(anatomyData, null, 0, 1);
+
+        // ============ 创建场景 ============
+        const rootGroup = new THREE.Group();
+        scene.add(rootGroup);
+
+        const allNodes = [];
+
+        function createScene(node) {
+            allNodes.push(node);
+            const isRoot = node.level === 0;
+            const sprite = createCard(node.name, isRoot, node.level);
+            sprite.position.copy(node.position);
+            sprite.userData.node = node;
+            rootGroup.add(sprite);
+            node.sprite = sprite;
+
+            // 仅根节点默认可见
+            sprite.visible = (node.level === 0);
+
+            node.lines = [];
+            const children = node.children || [];
+            children.forEach(child => {
+                const startPos = node.position;
+                const endPos = child.position;
+                let mid = startPos.clone().add(endPos).multiplyScalar(0.55).normalize();
+                if (startPos.length() < 0.1) {
+                    const dir = endPos.clone().normalize();
+                    mid.copy(dir.multiplyScalar(150));
+                } else {
+                    mid.multiplyScalar(startPos.length() * 1.15 || 300);
+                }
+                const curve = new THREE.QuadraticBezierCurve3(startPos, mid, endPos);
+                const points = curve.getPoints(30);
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({
+                    color: 0x3388cc,
+                    transparent: true,
+                    opacity: 0.45,
+                });
+                const line = new THREE.Line(geometry, material);
+                line.visible = false;
+                rootGroup.add(line);
+                node.lines.push(line);
+                child.line = line;
+
+                createScene(child);
+            });
+        }
+        createScene(anatomyData);
+
+        // ============ 展开/收起逻辑 ============
+        function expandNode(node) {
+            if (node.expanded) return;
+            node.expanded = true;
+            const children = node.children || [];
+            children.forEach(child => {
+                child.sprite.visible = true;
+                if (child.line) child.line.visible = true;
+            });
+        }
+
+        function collapseNode(node) {
+            if (!node.expanded) return;
+            node.expanded = false;
+            // 隐藏所有后代并重置它们的 expanded 状态
+            function hideAndReset(n) {
+                const kids = n.children || [];
+                kids.forEach(child => {
+                    child.sprite.visible = false;
+                    if (child.line) child.line.visible = false;
+                    child.expanded = false; // 重置展开状态
+                    hideAndReset(child); // 递归处理更深层
+                });
+            }
+            hideAndReset(node);
+        }
+
+        function toggleNode(node) {
+            if (!node.children || node.children.length === 0) return;
+            if (node.expanded) {
+                collapseNode(node);
+            } else {
+                expandNode(node);
+            }
+        }
+
+        // 根节点切换全部展开/收起
+        function toggleRoot(node) {
+            if (node.level !== 0) return;
+            const firstLevel = node.children || [];
+            // 检查是否有任意一级节点可见
+            const anyVisible = firstLevel.some(child => child.sprite.visible);
+            if (anyVisible) {
+                // 收起所有一级及其后代
+                firstLevel.forEach(child => {
+                    if (child.expanded) collapseNode(child);
+                    child.sprite.visible = false;
+                    if (child.line) child.line.visible = false;
+                    // 重置所有后代状态
+                    function resetAll(n) {
+                        (n.children || []).forEach(grand => {
+                            grand.sprite.visible = false;
+                            if (grand.line) grand.line.visible = false;
+                            grand.expanded = false;
+                            resetAll(grand);
+                        });
+                    }
+                    resetAll(child);
+                });
+                node.expanded = false;
+            } else {
+                // 展开所有一级
+                firstLevel.forEach(child => {
+                    child.sprite.visible = true;
+                    if (child.line) child.line.visible = true;
+                });
+                node.expanded = true;
+            }
+        }
+
+        // ============ 交互 ============
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const modal = document.getElementById("modal");
+
+        function getAllSprites(node) {
+            let sprites = [node.sprite];
+            (node.children || []).forEach(child => {
+                sprites = sprites.concat(getAllSprites(child));
+            });
+            return sprites;
+        }
+        const allSprites = getAllSprites(anatomyData);
+
+        renderer.domElement.addEventListener("click", (e) => {
+            mouse.x = (e.clientX / innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(allSprites);
+
+            if (hits.length > 0) {
+                const sprite = hits[0].object;
+                // 关键修复：如果精灵不可见，忽略点击
+                if (!sprite.visible) return;
+
+                const node = sprite.userData.node;
+                if (!node) return;
+
+                // 根节点切换全部展开/收起
+                if (node.level === 0) {
+                    toggleRoot(node);
+                } else {
+                    toggleNode(node);
+                }
+
+                // 显示信息卡片
+                let html = `<h2>${node.name}</h2><p>${node.detail || '（无详细描述）'}</p>`;
+                const childCount = node.children ? node.children.length : 0;
+                if (childCount > 0) {
+                    const childNames = node.children.map(c => c.name).join('、');
+                    html += `<div class="tag">子节点（${childCount}个）：${childNames}</div>`;
+                    if (node.level === 0) {
+                        const status = node.expanded ? '已全部展开' : '已全部收起';
+                        html += `<p class="hint">根节点状态：${status}，点击可切换</p>`;
+                    } else {
+                        const status = node.expanded ? '已展开' : '已收起';
+                        html += `<p class="hint">当前状态：${status}，点击可切换</p>`;
+                    }
+                } else {
+                    html += `<div class="tag">此节点无子节点</div>`;
+                }
+                modal.innerHTML = html;
+                modal.style.display = "block";
+            } else {
+                modal.style.display = "none";
+            }
+        });
+
+        renderer.domElement.addEventListener("mousemove", (e) => {
+            mouse.x = (e.clientX / innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(allSprites);
+            // 只对可见的精灵显示指针
+            let hover = false;
+            if (hits.length > 0 && hits[0].object.visible) {
+                hover = true;
+            }
+            renderer.domElement.style.cursor = hover ? 'pointer' : 'grab';
+        });
+
+        // ============ OrbitControls ============
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.35;
+        controls.enablePan = false;
+        controls.minDistance = 420;
+        controls.maxDistance = 1600;
+        controls.target.set(0, 0, 0);
+
+        controls.addEventListener('start', () => { controls.autoRotate = false; });
+        controls.addEventListener('end', () => {
+            setTimeout(() => {
+                if (!controls._isInteracting) controls.autoRotate = true;
+            }, 2000);
+        });
+        controls._isInteracting = false;
+        renderer.domElement.addEventListener('pointerdown', () => { controls._isInteracting = true; });
+        renderer.domElement.addEventListener('pointerup', () => {
+            setTimeout(() => { controls._isInteracting = false; }, 100);
+        });
+
+        // ============ 星空背景 ============
+        const starGeo = new THREE.BufferGeometry();
+        const starCount = 2200;
+        const starPos = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount * 3; i++) {
+            starPos[i] = (Math.random() - 0.5) * 2600;
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+        const starMat = new THREE.PointsMaterial({
+            color: 0x88aacc,
+            size: 1.6,
+            transparent: true,
+            opacity: 0.7,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+        });
+        scene.add(new THREE.Points(starGeo, starMat));
+
+        // ============ 中心光晕 ============
+        const glow = new THREE.Mesh(
+            new THREE.SphereGeometry(18, 32, 32),
+            new THREE.MeshBasicMaterial({
+                color: 0x4488ff,
+                transparent: true,
+                opacity: 0.35,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+            })
+        );
+        scene.add(glow);
+
+        // ============ 动画循环 ============
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // ============ 窗口自适应 ============
+        window.addEventListener('resize', () => {
+            camera.aspect = innerWidth / innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(innerWidth, innerHeight);
+        });
+
+        // ============ 快捷键 ============
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') modal.style.display = 'none';
+            if (e.key === 'r' || e.key === 'R') controls.autoRotate = !controls.autoRotate;
+        });
+
+        console.log(`✅ 层级解剖学思维导图已加载，共 ${allNodes.length} 个节点，初始仅显示根节点。`);
+    </script>
 </body>
 </html>
