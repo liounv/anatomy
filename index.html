@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>3D Anatomy Mind Map</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:"Microsoft YaHei"}
+#panel{position:fixed;right:25px;top:25px;width:300px;padding:20px;color:white;background:rgba(5,20,40,.85);border:1px solid #38a8ff;border-radius:16px;display:none;z-index:9}
+.node{padding:10px 15px;background:rgba(5,25,45,.8);border:1px solid #4daaff;border-radius:12px;color:white;cursor:pointer;white-space:nowrap;box-shadow:0 0 15px #006cff55}
+</style>
+</head>
+<body>
+<div id="panel"></div>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js";
+import {CSS3DRenderer,CSS3DObject} from "https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/renderers/CSS3DRenderer.js";
+import {OrbitControls} from "https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/controls/OrbitControls.js";
+
+/* 球体半径：后续可修改 */
+const SPHERE_RADIUS=260;
+
+/* 解剖学JSON数据 */
+const anatomyData={
+name:"人体解剖学",
+detail:"研究人体结构和功能关系",
+children:[
+{name:"神经系统",detail:"控制感觉运动和信息传递",children:[
+{name:"脑",detail:"高级神经活动中心"},
+{name:"脊髓",detail:"连接脑与周围神经"}]},
+{name:"运动系统",detail:"骨骼肌肉关节组成",children:[
+{name:"骨骼",detail:"支撑人体结构"},
+{name:"肌肉",detail:"产生运动力量"}]},
+{name:"消化系统",detail:"完成食物消化吸收",children:[
+{name:"胃",detail:"储存和初步消化食物"},
+{name:"小肠",detail:"主要吸收营养"}]}
+]};
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x000000);
+
+const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,1,2000);
+camera.position.z=800;
+
+const renderer=new CSS3DRenderer();
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const root=new THREE.Group();
+scene.add(root);
+
+function flatten(n,p=null,a=[]){
+a.push({node:n,parent:p});
+(n.children||[]).forEach(x=>flatten(x,n,a));
+return a;
+}
+
+function spherePos(i,total){
+const phi=Math.acos(1-2*(i+.5)/total);
+const theta=Math.PI*(1+Math.sqrt(5))*i;
+return new THREE.Vector3(
+Math.cos(theta)*Math.sin(phi),
+Math.sin(theta)*Math.sin(phi),
+Math.cos(phi)
+).multiplyScalar(SPHERE_RADIUS);
+}
+
+const data=flatten(anatomyData);
+const objects=[];
+
+data.forEach((item,i)=>{
+const div=document.createElement("div");
+div.className="node";
+div.innerText=item.node.name;
+
+const obj=new CSS3DObject(div);
+obj.position.copy(spherePos(i,data.length));
+root.add(obj);
+
+objects.push({obj,item});
+
+div.onclick=()=>{
+const p=document.getElementById("panel");
+p.style.display="block";
+p.innerHTML="<h2>"+item.node.name+"</h2><p>"+item.node.detail+"</p>";
+objects.forEach(o=>{
+if(o.item.parent===item.node)o.obj.visible=!o.obj.visible;
+});
+};
+});
+
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true;
+controls.autoRotate=true;
+controls.autoRotateSpeed=.5;
+
+let dragging=false;
+
+renderer.domElement.addEventListener("pointerdown",()=>dragging=true);
+renderer.domElement.addEventListener("pointerup",()=>dragging=false);
+
+function animate(){
+requestAnimationFrame(animate);
+controls.autoRotate=!dragging;
+controls.update();
+renderer.render(scene,camera);
+}
+animate();
+
+window.onresize=()=>{
+camera.aspect=innerWidth/innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(innerWidth,innerHeight);
+};
+</script>
+</body>
+</html>
